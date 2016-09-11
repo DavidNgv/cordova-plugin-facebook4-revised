@@ -5,6 +5,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
+import com.facebook.HttpMethod;
 import com.facebook.AccessToken;
 import bolts.AppLinks;
 import com.facebook.CallbackManager;
@@ -323,6 +324,10 @@ public class ConnectPlugin extends CordovaPlugin {
 
         } else if (action.equals("graphApi")) {
             executeGraph(args, callbackContext);
+
+            return true;
+        } else if (action.equals("graphApiPost")) {
+            executeGraphPost(args, callbackContext);
 
             return true;
         } else if (action.equals("appInvite")) {
@@ -662,6 +667,77 @@ public class ConnectPlugin extends CordovaPlugin {
         }
     }
 
+    private void executeGraphPost(JSONArray args, CallbackContext callbackContext) throws JSONException {
+        graphContext = callbackContext;
+        PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
+        pr.setKeepCallback(true);
+        graphContext.sendPluginResult(pr);
+
+        graphPath = args.getString(0);
+        JSONArray arr = args.getJSONArray(1);
+
+        final Set<String> permissions = new HashSet<String>(arr.length());
+        for (int i = 0; i < arr.length(); i++) {
+            permissions.add(arr.getString(i));
+        }
+
+        if (permissions.size() == 0) {
+            makeGraphCallPost();
+            return;
+        }
+
+        boolean publishPermissions = false;
+        boolean readPermissions = false;
+        String declinedPermission = null;
+
+        AccessToken accessToken = AccessToken.getCurrentAccessToken();
+        if (accessToken.getPermissions().containsAll(permissions)) {
+            makeGraphCall();
+            return;
+        }
+
+        Set<String> declined = accessToken.getDeclinedPermissions();
+
+        // Figure out if we have all permissions
+        for (String permission : permissions) {
+            if (declined.contains(permission)) {
+                declinedPermission = permission;
+                break;
+            }
+
+            if (isPublishPermission(permission)) {
+                publishPermissions = true;
+            } else {
+                readPermissions = true;
+            }
+
+            // Break if we have a mixed bag, as this is an error
+            if (publishPermissions && readPermissions) {
+                break;
+            }
+        }
+
+        if (declinedPermission != null) {
+            graphContext.error("This request needs declined permission: " + declinedPermission);
+        }
+
+        if (publishPermissions && readPermissions) {
+            graphContext.error("Cannot ask for both read and publish permissions.");
+            return;
+        }
+
+        cordova.setActivityResultCallback(this);
+        LoginManager loginManager = LoginManager.getInstance();
+        // Check for write permissions, the default is read (empty)
+        if (publishPermissions) {
+            // Request new publish permissions
+            loginManager.logInWithPublishPermissions(cordova.getActivity(), permissions);
+        } else {
+            // Request new read permissions
+            loginManager.logInWithReadPermissions(cordova.getActivity(), permissions);
+        }
+    }
+
     private void executeLogEvent(JSONArray args, CallbackContext callbackContext) throws JSONException {
         if (args.length() == 0) {
             // Not enough parameters
@@ -861,6 +937,51 @@ public class ConnectPlugin extends CordovaPlugin {
         }
 
         graphRequest.setParameters(params);
+        graphRequest.executeAsync();
+    }
+
+    private void makeGraphCallPost() {
+        //If you're using the paging URLs they will be URLEncoded, let's decode them.
+        try {
+            graphPath = URLDecoder.decode(graphPath, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+
+        String[] urlParts = graphPath.split("\\?");
+        String graphAction = urlParts[0];
+
+        Bundle params = graphRequest.getParameters();
+
+        if (urlParts.length > 1) {
+            String[] queries = urlParts[1].split("&");
+
+            for (String query : queries) {
+                int splitPoint = query.indexOf("=");
+                if (splitPoint > 0) {
+                    String key = query.substring(0, splitPoint);
+                    String value = query.substring(splitPoint + 1, query.length());
+                    params.putString(key, value);
+                }
+            }
+        }
+
+        GraphRequest graphRequest = GraphRequest.newGraphPathRequest(AccessToken.getCurrentAccessToken(), graphAction, params, HttpMethod.POST, new GraphRequest.Callback() {
+            @Override
+            public void onCompleted(GraphResponse response) {
+                if (graphContext != null) {
+                    if (response.getError() != null) {
+                        graphContext.error(getFacebookRequestErrorResponse(response.getError()));
+                    } else {
+                        graphContext.success(response.getJSONObject());
+                    }
+                    graphPath = null;
+                    graphContext = null;
+                }
+            }
+        });
+
+        //graphRequest.setParameters(params);
         graphRequest.executeAsync();
     }
 
