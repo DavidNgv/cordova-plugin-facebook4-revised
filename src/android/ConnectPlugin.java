@@ -1060,7 +1060,7 @@ public class ConnectPlugin extends CordovaPlugin {
         graphRequest.executeAsync();
     }
 
-    private void makeEventCall() {
+    private void makeEventCall() throws JSONException {
         //If you're using the paging URLs they will be URLEncoded, let's decode them.
         try {
             graphPath = URLDecoder.decode(graphPath, "UTF-8");
