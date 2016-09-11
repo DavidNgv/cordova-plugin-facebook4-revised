@@ -951,7 +951,8 @@ public class ConnectPlugin extends CordovaPlugin {
         String[] urlParts = graphPath.split("\\?");
         String graphAction = urlParts[0];
 
-        Bundle params = graphRequest.getParameters();
+        //Bundle params = graphRequest.getParameters();
+        Bundle params = new Bundle();
 
         if (urlParts.length > 1) {
             String[] queries = urlParts[1].split("&");
