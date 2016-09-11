@@ -990,7 +990,6 @@ public class ConnectPlugin extends CordovaPlugin {
             new GraphRequest.Callback() {
                 @Override
                 public void onCompleted(GraphResponse response) {
-                    /* handle the result */
                 }
             }
         ).executeAsync();*/
