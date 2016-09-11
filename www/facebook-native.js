@@ -42,7 +42,7 @@ exports.api = function api (graphPath, permissions, s, f) {
   exec(s, f, 'FacebookConnectPlugin', 'graphApi', [graphPath, permissions])
 }
 
-exports.api = function apiPost (graphPath, permissions, s, f) {
+exports.apiPost = function apiPost (graphPath, permissions, s, f) {
   permissions = permissions || []
   exec(s, f, 'FacebookConnectPlugin', 'graphApiPost', [graphPath, permissions])
 }
