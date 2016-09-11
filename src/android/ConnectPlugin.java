@@ -330,6 +330,10 @@ public class ConnectPlugin extends CordovaPlugin {
             executeGraphPost(args, callbackContext);
 
             return true;
+        }  else if (action.equals("eventPost")) {
+            executeEventPost(args, callbackContext);
+
+            return true;
         } else if (action.equals("appInvite")) {
             executeAppInvite(args, callbackContext);
 
@@ -692,7 +696,78 @@ public class ConnectPlugin extends CordovaPlugin {
 
         AccessToken accessToken = AccessToken.getCurrentAccessToken();
         if (accessToken.getPermissions().containsAll(permissions)) {
-            makeGraphCall();
+            makeGraphCallPost();
+            return;
+        }
+
+        Set<String> declined = accessToken.getDeclinedPermissions();
+
+        // Figure out if we have all permissions
+        for (String permission : permissions) {
+            if (declined.contains(permission)) {
+                declinedPermission = permission;
+                break;
+            }
+
+            if (isPublishPermission(permission)) {
+                publishPermissions = true;
+            } else {
+                readPermissions = true;
+            }
+
+            // Break if we have a mixed bag, as this is an error
+            if (publishPermissions && readPermissions) {
+                break;
+            }
+        }
+
+        if (declinedPermission != null) {
+            graphContext.error("This request needs declined permission: " + declinedPermission);
+        }
+
+        if (publishPermissions && readPermissions) {
+            graphContext.error("Cannot ask for both read and publish permissions.");
+            return;
+        }
+
+        cordova.setActivityResultCallback(this);
+        LoginManager loginManager = LoginManager.getInstance();
+        // Check for write permissions, the default is read (empty)
+        if (publishPermissions) {
+            // Request new publish permissions
+            loginManager.logInWithPublishPermissions(cordova.getActivity(), permissions);
+        } else {
+            // Request new read permissions
+            loginManager.logInWithReadPermissions(cordova.getActivity(), permissions);
+        }
+    }
+
+    private void executeEventPost(JSONArray args, CallbackContext callbackContext) throws JSONException {
+        graphContext = callbackContext;
+        PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
+        pr.setKeepCallback(true);
+        graphContext.sendPluginResult(pr);
+
+        graphPath = args.getString(0);
+        JSONArray arr = args.getJSONArray(1);
+
+        final Set<String> permissions = new HashSet<String>(arr.length());
+        for (int i = 0; i < arr.length(); i++) {
+            permissions.add(arr.getString(i));
+        }
+
+        if (permissions.size() == 0) {
+            makeEventCall();
+            return;
+        }
+
+        boolean publishPermissions = false;
+        boolean readPermissions = false;
+        String declinedPermission = null;
+
+        AccessToken accessToken = AccessToken.getCurrentAccessToken();
+        if (accessToken.getPermissions().containsAll(permissions)) {
+            makeEventCall();
             return;
         }
 
@@ -982,19 +1057,39 @@ public class ConnectPlugin extends CordovaPlugin {
             }
         });
 
-        /*GraphRequest graphRequest = new GraphRequest(
+        graphRequest.executeAsync();
+    }
+
+    private void makeEventCall() {
+        //If you're using the paging URLs they will be URLEncoded, let's decode them.
+        try {
+            graphPath = URLDecoder.decode(graphPath, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+
+        String[] urlParts = graphPath.split("\\?");
+        String graphAction = urlParts[0];
+
+        GraphRequest request = GraphRequest.newPostRequest(
             AccessToken.getCurrentAccessToken(),
             graphAction,
-            params,
-            HttpMethod.POST,
+            new JSONObject("{}"),
             new GraphRequest.Callback() {
                 @Override
                 public void onCompleted(GraphResponse response) {
+                    if (graphContext != null) {
+                        if (response.getError() != null) {
+                            graphContext.error(getFacebookRequestErrorResponse(response.getError()));
+                        } else {
+                            graphContext.success(response.getJSONObject());
+                        }
+                        graphPath = null;
+                        graphContext = null;
+                    }
                 }
-            }
-        ).executeAsync();*/
-
-        graphRequest.executeAsync();
+            });
+        request.executeAsync();
     }
 
     /*
