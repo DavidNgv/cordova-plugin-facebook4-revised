@@ -967,7 +967,8 @@ public class ConnectPlugin extends CordovaPlugin {
             }
         }
 
-        GraphRequest graphRequest = GraphRequest.newGraphPathRequest(AccessToken.getCurrentAccessToken(), graphAction, params, HttpMethod.POST, new GraphRequest.Callback() {
+        //GraphRequest graphRequest = GraphRequest.newGraphPathRequest(AccessToken.getCurrentAccessToken(), graphAction, params, HttpMethod.POST, new GraphRequest.Callback() {
+        GraphRequest graphRequest = new GraphRequest(AccessToken.getCurrentAccessToken(), graphAction, params, HttpMethod.POST, new GraphRequest.Callback() {
             @Override
             public void onCompleted(GraphResponse response) {
                 if (graphContext != null) {
